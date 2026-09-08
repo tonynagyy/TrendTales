@@ -14,15 +14,17 @@ ENV/
 env/
 
 # Data & Cache (RAG / Web Scraping / Vector Stores)
-data/
-raw_data/
 vector_store/
 chroma_db/
 faiss_index/
 *.sqlite3
 *.db
 *.csv
-*.json
+
+# Generated Pipeline Data (regenerate by running the scripts)
+Data preprocessing/Data/
+bert_classifier/results/
+bert_classifier/saved_model/
 
 # Generated Audio Files (TTS Output)
 /output/

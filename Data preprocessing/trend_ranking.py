@@ -2,7 +2,10 @@
 
 import json
 import re
+# pyrefly: ignore [missing-import]
 import nltk
+from pathlib import Path
+# pyrefly: ignore [missing-import]
 from nltk.corpus import stopwords
 from collections import Counter
 from datetime import datetime
@@ -12,11 +15,32 @@ nltk.download("stopwords")
 stop_words = set(stopwords.words("english"))
 
 news_stop_words = {
-    "said", "says", "reported", "reportedly", "according",
-    "reuters", "new", "nearly", "which", "could", "would",
+    # Reporting verbs
+    "said", "says", "reported", "reportedly", "according", "added",
+    "told", "announced", "stated", "confirmed", "revealed",
+    # News sources / generic names
+    "reuters", "bloomberg", "associated", "press", "news",
+    # Vague quantities
+    "new", "nearly", "billion", "million", "trillion", "thousand",
+    "percent", "percentage",
+    # Days / months / time
     "friday", "saturday", "sunday", "monday", "tuesday",
-    "wednesday", "thursday", "billion", "million",
-    "company", "companies", "offering", "plans"
+    "wednesday", "thursday", "january", "february", "march",
+    "april", "june", "july", "august", "september", "october",
+    "november", "december", "year", "years", "week", "weeks",
+    "month", "months", "today", "yesterday",
+    # Generic filler words that appeared in rankings
+    "first", "last", "next", "post", "also", "just", "still",
+    "even", "back", "make", "take", "made", "been", "into",
+    "over", "more", "than", "from", "with", "that", "this",
+    "will", "have", "after", "about", "could", "would", "should",
+    "one", "report", "reports", "two", "three", "four", "five",
+    # Business filler
+    "company", "companies", "offering", "plans", "rate", "rates",
+    "data", "share", "shares", "time", "well", "high", "part",
+    # Sports filler
+    "season", "game", "games", "team", "teams", "play", "played",
+    "win", "won", "loss", "match",
 }
 
 stop_words.update(news_stop_words)
@@ -151,6 +175,7 @@ def calculate_trend_scores(documents):
 def save_top_trends(trends, filename="Data preprocessing/Data/top_trends.json", limit=10):
     top_trends = trends[:limit]
 
+    Path(filename).parent.mkdir(parents=True, exist_ok=True)  # Fix: auto-create Data/ dir
     with open(filename, "w", encoding="utf-8") as file:
         json.dump(top_trends, file, ensure_ascii=False, indent=4)
 

@@ -1,5 +1,6 @@
 import json
 import re
+from pathlib import Path
 
 
 def load_documents(filename="Data preprocessing/Data/sample_data.json"):
@@ -39,6 +40,7 @@ def preprocess_documents(documents):
     return cleaned_documents
 
 def save_documents(documents, filename="Data preprocessing/Data/cleaned_data.json"):
+    Path(filename).parent.mkdir(parents=True, exist_ok=True)  # Fix: auto-create Data/ dir
     with open(filename, "w", encoding="utf-8") as file:
         json.dump(documents, file, ensure_ascii=False, indent=4)
 
