@@ -1,9 +1,8 @@
-import requests
 import os
+import requests
 import json
 import time
 from pathlib import Path
-# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 
 load_dotenv()  # Loads .env file automatically
@@ -32,7 +31,7 @@ def create_document(id, source, title, content, date, category_hint=""):
 
 def collect_news_for_topic(topic_label, query, page_size=PAGE_SIZE):
     """Fetch up to page_size articles for a single topic query."""
-    api_key = os.getenv("NEWS_API_KEY")
+    api_key = os.getenv("NEWS_API_KEY") # Make sure to set your NEWS_API_KEY in the .env file or use directly in the code (not recomended)
 
     url = "https://newsapi.org/v2/everything"
 
