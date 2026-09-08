@@ -15,7 +15,7 @@ TOPIC_QUERIES = {
     "World":        "election OR war OR diplomacy OR climate OR United Nations OR government OR conflict",
 }
 
-PAGE_SIZE = 99  
+PAGE_SIZE = 100  
 
 
 def create_document(id, source, title, content, date, category_hint=""):
