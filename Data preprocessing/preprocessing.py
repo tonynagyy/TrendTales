@@ -1,15 +1,20 @@
 import json
 import re
 from pathlib import Path
+from html import unescape
 
 
-def load_documents(filename="Data preprocessing/Data/sample_data.json"):
+def load_documents(filename="Data preprocessing/Data/final_news.json"):
     with open(filename, "r", encoding="utf-8") as file:
         return json.load(file)
 
 
 def clean_text(text):
-    text = re.sub(r"http\S+|www\S+", "", text)
+    text = text or ""
+    text = unescape(text)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"http\S+|www\S+", " ", text)
+    text = re.sub(r"\[\+\d+\s+chars\]", " ", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
@@ -19,11 +24,8 @@ def preprocess_documents(documents):
     seen = set()
 
     for document in documents:
-        title = document.get("title") or ""
-        content = document.get("content") or ""
-
-        title = clean_text(title)
-        content = clean_text(content)
+        title = clean_text(document.get("title"))
+        content = clean_text(document.get("content"))
 
         key = (title.lower(), content.lower())
 
@@ -39,10 +41,20 @@ def preprocess_documents(documents):
 
     return cleaned_documents
 
-def save_documents(documents, filename="Data preprocessing/Data/cleaned_data.json"):
-    Path(filename).parent.mkdir(parents=True, exist_ok=True)  # Fix: auto-create Data/ dir
+
+def save_documents(
+    documents,
+    filename="Data preprocessing/Data/cleaned_data.json"
+):
+    Path(filename).parent.mkdir(parents=True, exist_ok=True)
+
     with open(filename, "w", encoding="utf-8") as file:
-        json.dump(documents, file, ensure_ascii=False, indent=4)
+        json.dump(
+            documents,
+            file,
+            ensure_ascii=False,
+            indent=4
+        )
 
 
 def main():

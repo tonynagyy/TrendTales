@@ -1,46 +1,38 @@
-# Trend Score = Frequency × Recency × Source Diversity
-
 import json
 import re
-# pyrefly: ignore [missing-import]
-import nltk
 from pathlib import Path
-# pyrefly: ignore [missing-import]
-from nltk.corpus import stopwords
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime
 
-nltk.download("stopwords")
+import nltk
+
+nltk.download("stopwords", quiet=True)
+
+from nltk.corpus import stopwords
+
 
 stop_words = set(stopwords.words("english"))
 
 news_stop_words = {
-    # Reporting verbs
     "said", "says", "reported", "reportedly", "according", "added",
     "told", "announced", "stated", "confirmed", "revealed",
-    # News sources / generic names
     "reuters", "bloomberg", "associated", "press", "news",
-    # Vague quantities
     "new", "nearly", "billion", "million", "trillion", "thousand",
     "percent", "percentage",
-    # Days / months / time
     "friday", "saturday", "sunday", "monday", "tuesday",
     "wednesday", "thursday", "january", "february", "march",
-    "april", "june", "july", "august", "september", "october",
-    "november", "december", "year", "years", "week", "weeks",
-    "month", "months", "today", "yesterday",
-    # Generic filler words that appeared in rankings
+    "april", "may", "june", "july", "august", "september",
+    "october", "november", "december", "year", "years", "week",
+    "weeks", "month", "months", "today", "yesterday",
     "first", "last", "next", "post", "also", "just", "still",
     "even", "back", "make", "take", "made", "been", "into",
     "over", "more", "than", "from", "with", "that", "this",
     "will", "have", "after", "about", "could", "would", "should",
     "one", "report", "reports", "two", "three", "four", "five",
-    # Business filler
     "company", "companies", "offering", "plans", "rate", "rates",
     "data", "share", "shares", "time", "well", "high", "part",
-    # Sports filler
     "season", "game", "games", "team", "teams", "play", "played",
-    "win", "won", "loss", "match",
+    "win", "won", "loss", "match"
 }
 
 stop_words.update(news_stop_words)
@@ -50,14 +42,18 @@ def load_documents(filename="Data preprocessing/Data/cleaned_data.json"):
     with open(filename, "r", encoding="utf-8") as file:
         return json.load(file)
 
+
 def extract_words(text):
-    text = re.sub(r"\[\+\d+\s+chars\]", "", text)
+    text = re.sub(r"\[\+\d+\s+chars\]", "", text or "")
     words = re.findall(r"\b[a-zA-Z]{3,}\b", text.lower())
+    return [
+    word
+    for word in words
+    if word not in stop_words and word not in {"com", "www", "http", "https"}
+    ]
 
-    return [word for word in words if word not in stop_words]
 
-def extract_phrases(text):
-    words = extract_words(text)
+def extract_phrases(words):
     phrases = []
 
     for i in range(len(words) - 1):
@@ -69,65 +65,78 @@ def extract_phrases(text):
 
     return phrases
 
-def calculate_frequency(documents):
-    word_counter = Counter()
-    phrase_counter = Counter()
-
-    for document in documents:
-        text = document["content"]
-
-        word_counter.update(extract_words(text))
-        phrase_counter.update(extract_phrases(text))
-
-    return word_counter, phrase_counter
 
 def calculate_recency(date):
-    article_date = datetime.fromisoformat(date.replace("Z", "+00:00"))
-    now = datetime.now(article_date.tzinfo)
+    if not date:
+        return 0
 
-    hours = (now - article_date).total_seconds() / 3600
+    try:
+        article_date = datetime.fromisoformat(
+            date.replace("Z", "+00:00")
+        )
 
-    return 1 / (1 + hours)
+        now = datetime.now(article_date.tzinfo)
 
-def calculate_source_diversity(documents):
-    word_sources = {}
-    phrase_sources = {}
+        hours = (now - article_date).total_seconds() / 3600
 
-    for document in documents:
-        text = document["content"]
-        source = document["source"]
+        if hours < 0:
+            hours = 0
 
-        words = set(extract_words(text))
-        phrases = set(extract_phrases(text))
+        return 1 / (1 + hours)
 
-        for word in words:
-            if word not in word_sources:
-                word_sources[word] = set()
-            word_sources[word].add(source)
+    except (ValueError, TypeError):
+        return 0
 
-        for phrase in phrases:
-            if phrase not in phrase_sources:
-                phrase_sources[phrase] = set()
-            phrase_sources[phrase].add(source)
-
-    return word_sources, phrase_sources
 
 def calculate_trend_scores(documents):
-    word_counter, phrase_counter = calculate_frequency(documents)
-    word_sources, phrase_sources = calculate_source_diversity(documents)
+    word_frequency = Counter()
+    phrase_frequency = Counter()
+
+    word_sources = defaultdict(set)
+    phrase_sources = defaultdict(set)
+
+    word_recency = defaultdict(list)
+    phrase_recency = defaultdict(list)
+
+    for document in documents:
+        content = document.get("content") or ""
+        source = document.get("source") or "Unknown"
+        date = document.get("date") or ""
+
+        recency = calculate_recency(date)
+
+        words = extract_words(content)
+        phrases = extract_phrases(words)
+
+        unique_words = set(words)
+        unique_phrases = set(phrases)
+
+        word_frequency.update(words)
+        phrase_frequency.update(phrases)
+
+        for word in unique_words:
+            word_sources[word].add(source)
+
+            if recency > 0:
+                word_recency[word].append(recency)
+
+        for phrase in unique_phrases:
+            phrase_sources[phrase].add(source)
+
+            if recency > 0:
+                phrase_recency[phrase].append(recency)
 
     trends = []
 
-    for word, frequency in word_counter.items():
+    for word, frequency in word_frequency.items():
+        recency_values = word_recency[word]
+
+        if recency_values:
+            recency = sum(recency_values) / len(recency_values)
+        else:
+            recency = 0
+
         source_diversity = len(word_sources[word])
-
-        recency_scores = []
-
-        for document in documents:
-            if word in extract_words(document["content"]):
-                recency_scores.append(calculate_recency(document["date"]))
-
-        recency = sum(recency_scores) / len(recency_scores)
 
         score = frequency * recency * source_diversity
 
@@ -140,22 +149,18 @@ def calculate_trend_scores(documents):
             "score": score
         })
 
-    for phrase, frequency in phrase_counter.items():
+    for phrase, frequency in phrase_frequency.items():
         if frequency < 2:
             continue
 
-        source_diversity = len(phrase_sources[phrase])
+        recency_values = phrase_recency[phrase]
 
-        recency_scores = []
-
-        for document in documents:
-            if phrase in " ".join(extract_words(document["content"])):
-                recency_scores.append(calculate_recency(document["date"]))
-
-        if not recency_scores:
+        if not recency_values:
             continue
 
-        recency = sum(recency_scores) / len(recency_scores)
+        recency = sum(recency_values) / len(recency_values)
+
+        source_diversity = len(phrase_sources[phrase])
 
         score = frequency * recency * source_diversity
 
@@ -172,19 +177,33 @@ def calculate_trend_scores(documents):
 
     return trends
 
-def save_top_trends(trends, filename="Data preprocessing/Data/top_trends.json", limit=10):
+
+def save_top_trends(
+    trends,
+    filename="Data preprocessing/Data/top_trends.json",
+    limit=10
+):
     top_trends = trends[:limit]
 
-    Path(filename).parent.mkdir(parents=True, exist_ok=True)  # Fix: auto-create Data/ dir
+    Path(filename).parent.mkdir(parents=True, exist_ok=True)
+
     with open(filename, "w", encoding="utf-8") as file:
-        json.dump(top_trends, file, ensure_ascii=False, indent=4)
+        json.dump(
+            top_trends,
+            file,
+            ensure_ascii=False,
+            indent=4
+        )
+
 
 def main():
     documents = load_documents()
 
+    print("Documents loaded:", len(documents))
+
     trends = calculate_trend_scores(documents)
 
-    print("Top Trends:")
+    print("\nTop Trends:")
 
     for trend in trends[:10]:
         print(
@@ -192,13 +211,12 @@ def main():
             "| Type:", trend["type"],
             "| Frequency:", trend["frequency"],
             "| Sources:", trend["source_diversity"],
-            "| Score:", round(trend["score"], 4)
+            "| Score:", round(trend["score"], 6)
         )
 
     save_top_trends(trends)
 
     print("\nTop trends saved successfully.")
-
 
 
 if __name__ == "__main__":
