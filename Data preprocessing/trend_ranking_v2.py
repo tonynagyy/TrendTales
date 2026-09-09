@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from html import unescape
 
-INPUT_FILE = "Data preprocessing/Data/final_news.json"
+INPUT_FILE = "Data preprocessing/Data/cleaned_data.json"
 OUTPUT_FILE = "Data preprocessing/Data/top_trends.json"
 
 RECENT_DAYS = 120
