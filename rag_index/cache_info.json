@@ -1,0 +1,6 @@
+{
+  "documents_hash": "007be3ea9d11ebfeaed640feb729ebac84510243711c4b4ad2cf5441f6b375ea",
+  "embedding_model": "all-MiniLM-L6-v2",
+  "chunk_size": 100,
+  "chunk_overlap": 20
+}
