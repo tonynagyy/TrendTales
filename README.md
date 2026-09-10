@@ -1,122 +1,137 @@
-# TrendTales AI 🎧
+# 🎧 TrendTales AI
 
-> Real-Time Trends → NLP Analysis → Fine-Tuned Multi-Label BERT → RAG → Story Generation → TTS
+> **Real-Time News Trends → BERT Multi-Label Classification → Multi-Query RAG → Qwen2.5 Story Generation → gTTS Audio Story**
 
-An NLP graduation project that collects real news trends, classifies them into multi-label categories using a fine-tuned BERT model, and generates personalized audio stories.
-
----
-
-## 🚀 Pipeline Overview
-
-```
-1. Data Collection     → google_news_collector.py / rss_news.py / Newsapi_data_collection.py
-2. Preprocessing       → merge_news.py      (clean & deduplicate articles)
-3. Trend Ranking       → trend_ranking_v2.py (score by frequency × recency × source diversity)
-4. BERT Classification → bert_classifier/classify.py (multi-label BERT → generates classified_data.json)
-5. RAG System          → (RAG Indexer & Vector Store)
-6. Story Generation    → (LLM Podcast Script Generator)
-7. TTS                 → (Text-To-Speech Audio Generator)
-```
+**TrendTales AI** is an advanced NLP pipeline and web application that transforms real-world news trends into engaging audio stories. By combining fine-tuned BERT multi-label classification, vector-backed Multi-Query RAG (Retrieval-Augmented Generation), state-of-the-art LLM story writing, and Text-to-Speech synthesis, TrendTales AI delivers personalized, narrative news audio on demand.
 
 ---
 
-## 📥 Fine-Tuned Model Weights (Download Link)
+## 🏗️ System Architecture & Pipeline Flow
 
-The fine-tuned BERT model weights (~438 MB) are gitignored to keep the repository lightweight. You can download the pre-trained model directly without retraining:
+```mermaid
+flowchart TD
+    A[User Topic Query] --> B[🧠 BERT Multi-Label Classifier]
+    B -->|Predicted Category & Confidence| C[🔍 Multi-Query RAG Engine]
+    C -->|FAISS Vector Search over 7,000+ Articles| D[Top Trending News Articles]
+    D --> E[✍️ Story Generator LLM - Qwen2.5-72B]
+    E -->|Fictional Narrative Story| F[🔊 Text-to-Speech Engine - gTTS]
+    F --> G[🎧 Audio MP3 Player & Download]
+```
+
+### ⚙️ Pipeline Components:
+1. **Data Collection & Preprocessing:** Aggregates, cleans, and ranks real news articles from multiple RSS and Google News feeds.
+2. **BERT Multi-Label Classifier (`bert_classifier`):** Fine-tuned `bert-base-uncased` model (85.86% Macro F1) detecting up to 8 news categories (*Politics, Economy, Business, Technology, Climate, Science, Education, International Affairs*).
+3. **Multi-Query RAG (`rag`):** Vector search powered by SentenceTransformers (`all-MiniLM-L6-v2`) and FAISS index with query expansion for high-precision retrieval over 7,100+ news articles.
+4. **Story Generation (`story_generation`):** Synthesizes retrieved news events into a creative, coherent narrative story using Qwen2.5-72B via Hugging Face Inference API.
+5. **Text-to-Speech (`story_generation/tts.py`):** Converts generated story text into an MP3 audio recording using gTTS with automatic character sanitization.
+
+---
+
+## 📥 Fine-Tuned Model Weights
+
+The pre-trained fine-tuned BERT model weights (~438 MB) can be downloaded directly:
 
 👉 **[Download Fine-Tuned BERT Model Weights (Google Drive)](https://drive.google.com/file/d/1YNesMp61Eww6z1W_bxNPU-3ke9BsQPU-/view?usp=sharing)**
 
-**Installation Instructions:**
-1. Download `saved_model.zip` from the Drive link above.
-2. Extract the contents directly into the `bert_classifier/saved_model/` directory.
+**Installation:**
+1. Download `saved_model.zip` from the link above.
+2. Extract the contents into `bert_classifier/saved_model/`.
 
 ---
 
-## ⚙️ Setup & Installation
+## 🚀 Setup & Installation
 
-**Prerequisites:** Python 3.10+, pip, NVIDIA GPU recommended
+### 1. Prerequisites
+- Python 3.10+
+- Virtual environment (`venv` or `conda`)
+
+### 2. Quickstart
 
 ```bash
+# Clone repository
 git clone https://github.com/tonynagyy/TrendTales.git
 cd TrendTales
 
+# Create & activate virtual environment
 python -m venv venv
-venv\Scripts\activate          # Windows
-# source venv/bin/activate     # Linux/Mac
+venv\Scripts\activate          # On Windows
+# source venv/bin/activate     # On Linux / Mac
 
+# Install dependencies
 pip install -r requirements.txt
-cp .env.example .env           # Add your API keys inside .env
+
+# Setup environment variables
+cp .env.example .env
+```
+
+> **Note on Hugging Face API:**
+> Add your free Hugging Face API key into `.env`:
+> `HUGGINGFACE_TOKEN=hf_xxxx...`
+
+---
+
+## 🎮 How to Run
+
+### 🌐 Option 1: Streamlit Web Application (Recommended)
+To launch the interactive Web UI:
+
+```powershell
+streamlit run app.py
+```
+
+Open your browser at **http://localhost:8501** to use the app.
+
+---
+
+### 💻 Option 2: CLI Pipeline
+To run directly from the command line:
+
+```powershell
+python main.py
 ```
 
 ---
 
-## 📦 Generating & Classifying the Data
+### 🧪 Option 3: Automated Pipeline Test Script
+To run an automated test across all pipeline stages:
 
-> ⚠️ Data files are **not included** in this repo (they are gitignored). Run the pipeline in order to generate and classify them:
-
-```bash
-# Step 1: Merge & Deduplicate collected articles
-python "Data preprocessing/mrege_news.py"
-
-# Step 2: Rank Top News Trends
-python "Data preprocessing/trend_ranking_v2.py"
-
-# Step 3: Run Multi-Label BERT Classifier
-python bert_classifier/classify.py
+```powershell
+python scratch/test_pipeline.py
 ```
-
-### 📄 Final Preprocessed Output File
-The final output file generated for the RAG system is **`Data preprocessing/Data/classified_data.json`**. Each article contains:
-- `categories`: Multi-label category array (e.g. `["Business", "Technology"]`)
-- `confidence`: Confidence score map for each category (e.g. `{"Technology": 0.9758, "Business": 0.8762}`)
-- `category`: Primary category string for backward compatibility
 
 ---
 
-## 🤖 Multi-Label BERT Classifier (Feature 2)
-
-Fine-tuned `bert-base-uncased` on Kaggle Multi-Label News Data across **8 categories**:  
-`Politics | Economy | Business | Technology | Climate | Science | Education | International Affairs`
-
-```bash
-# Train the model (optional if you downloaded weights from Drive)
-python bert_classifier/train.py
-
-# Evaluate performance & generate per-category metrics chart
-python bert_classifier/evaluate.py
-
-# Classify pipeline articles -> generates classified_data.json
-python bert_classifier/classify.py
-```
-
-### 📊 Evaluation Metrics:
-- **Macro F1 Score:** **85.86%**
-- **Micro F1 Score:** **84.43%**
-- **Weighted F1 Score:** **84.44%**
-- **Sample Output:** Classified **7,120 articles** into multi-label tags with high confidence.
-
----
-
-## 📁 Project Structure
+## 📁 Repository Directory Structure
 
 ```
 TrendTales/
-├── Data preprocessing/
-│   ├── google_news_collector.py
-│   ├── rss_news.py
-│   ├── Newsapi_data_collection.py
-│   ├── mrege_news.py
-│   ├── trend_ranking_v2.py
-│   └── Data/               ← gitignored, contains classified_data.json
-├── bert_classifier/
-│   ├── config.py
-│   ├── train.py
-│   ├── evaluate.py
-│   ├── classify.py
-│   ├── data/               ← gitignored (Kaggle dataset CSV)
-│   ├── saved_model/        ← gitignored (Download from Drive link)
-│   └── results/            ← evaluation reports & charts
-├── .env.example
-├── requirements.txt
-└── README.md
+├── app.py                         # Main Streamlit Web Application
+├── main.py                        # CLI Application Entry Point
+├── bert_classifier/               # Multi-Label BERT Classifier Package
+│   ├── classify.py                # Classifier inference API
+│   ├── config.py                  # Model & label hyperparameters
+│   ├── evaluate.py                # Evaluation & metric visualizations
+│   ├── train.py                   # PyTorch training script
+│   └── saved_model/               # Model weights directory
+├── rag/                           # Multi-Query RAG Package
+│   ├── multi_query_rag.py         # FAISS vector store & multi-query expansion
+│   └── multi query rag v2.py      # Reference RAG engine
+├── story_generation/              # Story Generation & Audio Package
+│   ├── story_generator.py         # Prompt builder & LLM client (Qwen2.5-72B)
+│   └── tts.py                     # gTTS Text-to-Speech synthesizer
+├── Data preprocessing/            # Data collection & trend ranking scripts
+├── outputs/                       # Output audio MP3 files
+├── rag_index/                     # FAISS vector index cache
+├── requirements.txt               # Dependencies list
+└── README.md                      # Documentation
 ```
+
+---
+
+## 📊 Model Performance Metrics
+
+- **BERT Multi-Label Classifier:**
+  - **Macro F1:** **85.86%**
+  - **Micro F1:** **84.43%**
+  - **Weighted F1:** **84.44%**
+  - **Dataset:** 7,120 classified news articles across 8 domain categories.

@@ -1,245 +1,87 @@
+"""
+TrendTales AI — CLI Pipeline
+Usage: python main.py
+Flow: User Query → BERT Classification → Multi-Query RAG → Story Generation → TTS
+"""
+
 import sys
 from pathlib import Path
-from tts import text_to_speech
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from bert_classifier.classify import classify_article
-
-from rag import (
-    load_top_trend_documents,
-    MultiQueryRAG,
-    TOP_TRENDS_FILE,
-    CLEANED_DATA_FILE,
-    FINAL_TOP_K,
-)
-
-RAG_QUERY_TEMPLATE = """
-User topic: {query}
-
-Detected categories:
-{categories}
-
-Use the detected categories as additional context,
-but prioritize semantic relevance to the user's topic.
-""".strip()
+from rag.multi_query_rag import load_documents, MultiQueryRAG
+from story_generation.story_generator import generate_story_from_events
+from story_generation.tts import text_to_speech
 
 
-def classify_user_query(query):
-    print("\n" + "=" * 60)
-    print("STEP 1 - BERT CLASSIFICATION")
+def run_pipeline(query: str, top_k: int = 3, category: str = None):
+
+    print("=" * 60)
+    print("TrendTales AI — BERT + RAG + Story + TTS")
     print("=" * 60)
 
-    print(f"\nUser topic: {query}")
+    # ── Step 1: BERT Multi-Label Classification ──────────────────────────────
+    print("\n[1/4] BERT Classification...")
+    cls = classify_article(query.strip())
+    categories = cls["categories"]
+    primary    = cls["primary_category"]
+    print(f"  Detected: {categories}  (primary: {primary})")
 
-    result = classify_article(query)
+    # ── Step 2: Multi-Query RAG Retrieval ────────────────────────────────────
+    print(f"\n[2/4] RAG Retrieval  (top {top_k} events)...")
+    docs = load_documents()
+    rag  = MultiQueryRAG(docs)
 
-    print(f"\nPrimary category: {result['primary_category']}")
-
-    print("\nAssigned categories:")
-
-    for category in result["categories"]:
-        print(f"  - {category}")
-
-    print("\nTop confidences:")
-
-    sorted_confidences = sorted(
-        result["confidence"].items(),
-        key=lambda x: x[1],
-        reverse=True
+    rag_category = category or primary
+    events, context = rag.build_context(
+        query,
+        category=rag_category,
+        final_top_k=top_k,
     )
 
-    for category, confidence in sorted_confidences[:5]:
-        print(
-            f"  {category:22s}: "
-            f"{confidence:.2%}"
-        )
+    if not events:
+        print("  [!] No relevant events found. Try a different query.")
+        return
 
-    return result
+    print(f"  Retrieved {len(events)} events:")
+    for i, ev in enumerate(events, 1):
+        print(f"    {i}. {ev['title']}  [{ev.get('source', '')}]")
 
+    # ── Step 3: Story Generation ─────────────────────────────────────────────
+    print("\n[3/4] Story Generation...")
+    story = generate_story_from_events(events)
+    print("\n--- GENERATED STORY ---")
+    print(story)
+    print("--- END OF STORY ---")
 
-def run_rag(query, classification):
-    print("\n" + "=" * 60)
-    print("STEP 2 - RAG")
-    print("=" * 60)
+    # ── Step 4: Text-to-Speech ────────────────────────────────────────────────
+    print("\n[4/4] Text-to-Speech...")
+    output_dir  = PROJECT_ROOT / "outputs"
+    output_dir.mkdir(exist_ok=True)
+    audio_path  = output_dir / "generated_story.mp3"
 
-    documents = load_top_trend_documents(
-        TOP_TRENDS_FILE,
-        CLEANED_DATA_FILE
-    )
-
-    if not documents:
-        raise RuntimeError(
-            "No articles were selected from Top Trends."
-        )
-
-    rag = MultiQueryRAG(documents)
-
-    categories = ", ".join(
-        classification["categories"]
-    )
-
-    rag_query = RAG_QUERY_TEMPLATE.format(
-        query=query,
-        categories=categories
-    )
-
-    print("\nRAG query:")
-    print(rag_query)
-
-    results, context = rag.build_context(
-        rag_query,
-        final_top_k=FINAL_TOP_K
-    )
+    text_to_speech(text=story, output_path=str(audio_path))
+    print(f"  Audio saved to: {audio_path}")
 
     print("\n" + "=" * 60)
-    print("TOP RAG RESULTS")
+    print("PIPELINE COMPLETE ✓")
     print("=" * 60)
-
-    if not results:
-        print("No relevant documents found.")
-
-        return {
-            "results": [],
-            "context": "",
-        }
-
-    for i, result in enumerate(results, start=1):
-        print(f"\n{i}. {result['title']}")
-
-        print(
-            f"   Trend: "
-            f"{result.get('trend', '')}"
-        )
-
-        print(
-            f"   Trend Score: "
-            f"{result.get('trend_score', 0)}"
-        )
-
-        print(
-            f"   Source: "
-            f"{result.get('source', '')}"
-        )
-
-        print(
-            f"   Category: "
-            f"{result.get('category_hint', '')}"
-        )
-
-        print(
-            f"   Similarity: "
-            f"{result.get('similarity', 0):.4f}"
-        )
 
     return {
-        "results": results,
-        "context": context,
+        "categories": categories,
+        "events":     events,
+        "story":      story,
+        "audio_path": str(audio_path),
     }
 
 
-def generate_audio_for_articles(results):
-    print("\n" + "=" * 60)
-    print("STEP 3 - TEXT TO SPEECH")
-    print("=" * 60)
-
-    if not results:
-        print("\nNo articles available for TTS.")
-        return
-
-    for i, article in enumerate(results, start=1):
-        title = article.get("title", "").strip()
-        content = article.get("content", "").strip()
-
-        if not content:
-            content = title
-
-        if not content:
-            print(
-                f"\n[WARNING] Article {i} has no text."
-            )
-            continue
-
-        text = f"{title}. {content}"
-
-        output_path = (
-            PROJECT_ROOT
-            / "outputs"
-            / f"article_{i}.mp3"
-        )
-
-        print(f"\nArticle {i}: {title}")
-
-        text_to_speech(
-            text=text,
-            output_path=str(output_path)
-        )
-
-    print(
-        "\n✓ All trending articles converted to audio."
-    )
-
-
-def main():
-    print("=" * 60)
-    print("TrendTales AI")
-    print("BERT + Top Trends + RAG + TTS")
-    print("=" * 60)
-
-    query = input(
-        "\nEnter your topic: "
-    ).strip()
-
-    if not query:
-        print("\n[error] Topic cannot be empty.")
-        return
-
-    try:
-        classification = classify_user_query(query)
-
-        rag_output = run_rag(
-            query,
-            classification
-        )
-
-        generate_audio_for_articles(
-            rag_output["results"]
-        )
-
-        print("\n" + "=" * 60)
-        print("PIPELINE STATUS")
-        print("=" * 60)
-
-        print("\n✓ User query received")
-        print("✓ BERT classification completed")
-        print("✓ Top Trends loaded")
-        print("✓ RAG retrieval completed")
-
-        print(
-            f"✓ Retrieved "
-            f"{len(rag_output['results'])} "
-            f"documents"
-        )
-
-        print("✓ Text-to-Speech completed")
-
-        print("\nAudio files are available in:")
-        print(f"  {PROJECT_ROOT / 'outputs'}")
-
-        print("\n" + "=" * 60)
-        print("RAG CONTEXT READY")
-        print("=" * 60)
-
-        print(rag_output["context"])
-
-    except Exception as e:
-        print("\n[ERROR]")
-        print(str(e))
-        raise
-
-
 if __name__ == "__main__":
-    main()
+    query = input("\nEnter your topic: ").strip()
+    if not query:
+        print("[error] Topic cannot be empty.")
+        sys.exit(1)
+
+    run_pipeline(query)
