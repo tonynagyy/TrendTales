@@ -1,3 +1,5 @@
+# Trend Score = Frequency × Recency × Source Diversity
+
 import json
 import re
 from pathlib import Path
